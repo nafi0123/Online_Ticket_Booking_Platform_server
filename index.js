@@ -58,6 +58,8 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+     const db = client.db("Online_Ticket_Booking_Platform");
+     const userCollection = db.collection("users");
   
     // middle admin before allowing admin activity
     // must be used after verifyFBToken middleware
@@ -84,7 +86,22 @@ async function run() {
       next();
     };
 
-   
+    // user 
+
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      user.role = "user";
+      user.createdAt = new Date();
+      const email = user.email;
+      const userExists = await userCollection.findOne({ email });
+
+      if (userExists) {
+        return res.send({ message: "user exists" });
+      }
+
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
 
 
     await client.db("admin").command({ ping: 1 });
