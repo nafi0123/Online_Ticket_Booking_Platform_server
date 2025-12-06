@@ -10,15 +10,14 @@ const crypto = require("crypto");
 
 const admin = require("firebase-admin");
 
-// const serviceAccount = require("./zap-del.json");
-// const serviceAccount = require("./firebase-admin-key.json");
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
+  "utf8"
+);
+const serviceAccount = JSON.parse(decoded);
 
-// const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
-// const serviceAccount = JSON.parse(decoded);
-
-// admin.initializeApp({
-//   credential: admin.credential.cert(serviceAccount),
-// });
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 function generateTrackingId() {
   const prefix = "PRCL"; // your brand prefix
@@ -80,7 +79,7 @@ async function run() {
       const query = { email };
       const user = await userCollection.findOne(query);
 
-      if (!user || user.role !== "rider") {
+      if (!user || user.role !== "vendor") {
         return res.status(403).send({ message: "forbidden access" });
       }
 
@@ -111,10 +110,36 @@ async function run() {
 
     // tickets
 
-    app.post("/tickets", async (req, res) => {
+    app.post("/tickets", verifyFBToken, verifyVendor, async (req, res) => {
       const ticketsData = req.body;
       (ticketsData.status = "pending"), (ticketsData.createdAt = new Date());
       const result = await userTickets.insertOne(ticketsData);
+      res.send(result);
+    });
+    app.get("/tickets", async (req, res) => {
+      try {
+        const { status } = req.query;
+
+        let query = {};
+
+        if (status) query.status = status;
+
+        console.log("QUERY:", query);
+
+        const result = await userTickets.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Tickets Fetch Error:", error);
+        res.status(500).send({ message: "Server Error", error: error.message });
+      }
+    });
+
+    app.patch("/tickets/:id", async (req, res) => {
+      const { status } = req.body;
+      const result = await userTickets.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { status } }
+      );
       res.send(result);
     });
 
