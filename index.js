@@ -58,9 +58,10 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-     const db = client.db("Online_Ticket_Booking_Platform");
-     const userCollection = db.collection("users");
-  
+    const db = client.db("Online_Ticket_Booking_Platform");
+    const userCollection = db.collection("users");
+    const userTickets = db.collection("tickets");
+
     // middle admin before allowing admin activity
     // must be used after verifyFBToken middleware
     const verifyAdmin = async (req, res, next) => {
@@ -86,7 +87,7 @@ async function run() {
       next();
     };
 
-    // user 
+    // user
 
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -94,15 +95,28 @@ async function run() {
       user.createdAt = new Date();
       const email = user.email;
       const userExists = await userCollection.findOne({ email });
-
       if (userExists) {
         return res.send({ message: "user exists" });
       }
-
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
 
+    app.get("/users/:email/role", async (req, res) => {
+      const email = req.params.email;
+      const query = { email };
+      const user = await userCollection.findOne(query);
+      res.send({ role: user?.role || "user" });
+    });
+
+    // tickets
+
+    app.post("/tickets", async (req, res) => {
+      const ticketsData = req.body;
+      (ticketsData.status = "pending"), (ticketsData.createdAt = new Date());
+      const result = await userTickets.insertOne(ticketsData);
+      res.send(result);
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
