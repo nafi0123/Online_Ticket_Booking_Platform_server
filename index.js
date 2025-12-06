@@ -118,11 +118,12 @@ async function run() {
     });
     app.get("/tickets", async (req, res) => {
       try {
-        const { status } = req.query;
+        const { status,vendorEmail } = req.query;
 
         let query = {};
 
         if (status) query.status = status;
+        if (vendorEmail) query.vendorEmail = vendorEmail;
 
         console.log("QUERY:", query);
 
