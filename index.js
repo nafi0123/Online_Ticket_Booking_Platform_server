@@ -118,7 +118,7 @@ async function run() {
     });
     app.get("/tickets", async (req, res) => {
       try {
-        const { status,vendorEmail } = req.query;
+        const { status, vendorEmail } = req.query;
 
         let query = {};
 
@@ -135,7 +135,7 @@ async function run() {
       }
     });
 
-    app.patch("/tickets/:id", async (req, res) => {
+    app.patch("/tickets/:id/role", async (req, res) => {
       const { status } = req.body;
       const result = await userTickets.updateOne(
         { _id: new ObjectId(req.params.id) },
@@ -144,10 +144,64 @@ async function run() {
       res.send(result);
     });
 
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
+    app.delete(
+      "/tickets/:id",
+      verifyFBToken,
+      verifyVendor,
+      async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await userTickets.deleteOne(query);
+        res.send(result);
+      }
     );
+
+    // Remove this route
+    // app.patch("/tickets/:id", async (req, res) => {
+    //   const { status } = req.body;
+    //   const result = await userTickets.updateOne(
+    //     { _id: new ObjectId(req.params.id) },
+    //     { $set: { status } }
+    //   );
+    //   res.send(result);
+    // });
+
+    app.patch("/tickets/:id", verifyFBToken, verifyVendor, async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+
+      try {
+        // Find the ticket first
+        const ticket = await userTickets.findOne({ _id: new ObjectId(id) });
+        if (!ticket) {
+          return res.status(404).send({ message: "Ticket not found" });
+        }
+
+        // Prevent updating rejected tickets
+        const rejectedStatuses = ["reject", "rejected"];
+        if (rejectedStatuses.includes((ticket.status || "").toLowerCase())) {
+          return res
+            .status(400)
+            .send({ message: "Cannot update a rejected ticket" });
+        }
+
+        // Ensure price and quantity are numbers
+        if (updatedData.price)
+          updatedData.price = parseFloat(updatedData.price);
+        if (updatedData.quantity)
+          updatedData.quantity = parseInt(updatedData.quantity);
+
+        // Update the ticket
+        const result = await userTickets.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updatedData }
+        );
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to update ticket", error });
+      }
+    });
   } finally {
   }
 }
