@@ -86,6 +86,8 @@ async function run() {
       next();
     };
 
+    // profile
+
     // user
 
     app.post("/users", async (req, res) => {
@@ -101,11 +103,29 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/users/:email/role", async (req, res) => {
+    app.get("/users/:email/role", verifyFBToken, async (req, res) => {
       const email = req.params.email;
       const query = { email };
       const user = await userCollection.findOne(query);
       res.send({ role: user?.role || "user" });
+    });
+
+    app.get("/users", verifyFBToken, verifyAdmin, async (req, res) => {
+      try {
+        const users = await userCollection.find().toArray();
+        res.send(users);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch users", error });
+      }
+    });
+
+    app.patch("/user/:id", async (req, res) => {
+      const updatedFields = req.body; // role OR isFraud
+      const result = await userCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: updatedFields }
+      );
+      res.send(result);
     });
 
     // tickets
@@ -135,14 +155,19 @@ async function run() {
       }
     });
 
-    app.patch("/tickets/:id/role", async (req, res) => {
-      const { status } = req.body;
-      const result = await userTickets.updateOne(
-        { _id: new ObjectId(req.params.id) },
-        { $set: { status } }
-      );
-      res.send(result);
-    });
+    app.patch(
+      "/tickets/:id/role",
+      verifyFBToken,
+      verifyAdmin,
+      async (req, res) => {
+        const { status } = req.body;
+        const result = await userTickets.updateOne(
+          { _id: new ObjectId(req.params.id) },
+          { $set: { status } }
+        );
+        res.send(result);
+      }
+    );
 
     app.delete(
       "/tickets/:id",
