@@ -145,7 +145,7 @@ async function run() {
         if (status) query.status = status;
         if (vendorEmail) query.vendorEmail = vendorEmail;
 
-        console.log("QUERY:", query);
+        // console.log("QUERY:", query);
 
         const result = await userTickets.find(query).toArray();
         res.send(result);
@@ -181,6 +181,42 @@ async function run() {
       }
     );
 
+    // app.get("/all-tickets", async (req, res) => {
+    //   try {
+    //     const tickets = await userTickets
+    //       .aggregate([
+    //         {
+    //           $lookup: {
+    //             from: "users",
+    //             localField: "vendorEmail",
+    //             foreignField: "email",
+    //             as: "vendor",
+    //           },
+    //         },
+    //         {
+    //           $unwind: "$vendor",
+    //         },
+    //         {
+    //           $match: {
+    //             "vendor.role": "vendor",
+    //             "vendor.isFraud": { $ne: true }, // fraud vendor hide
+    //             status: "approve", // only approved tickets
+    //           },
+    //         },
+    //         {
+    //           $project: {
+    //             vendor: 0,
+    //           },
+    //         },
+    //       ])
+    //       .toArray();
+
+    //     res.send(tickets);
+    //   } catch (error) {
+    //     res.status(500).send({ message: "Failed to fetch tickets", error });
+    //   }
+    // });
+
     // Remove this route
     // app.patch("/tickets/:id", async (req, res) => {
     //   const { status } = req.body;
@@ -190,6 +226,49 @@ async function run() {
     //   );
     //   res.send(result);
     // });
+
+    app.get("/all-tickets", async (req, res) => {
+      try {
+        const { from, to, transport, sort } = req.query;
+
+        // Fraud vendors
+        const fraudVendors = await userCollection
+          .find({ role: "vendor", isFraud: true })
+          .toArray();
+        const fraudEmails = fraudVendors.map((v) => v.email);
+
+        const query = {
+          status: "approve", // only approved tickets
+          vendorEmail: { $nin: fraudEmails },
+        };
+
+        // Only add filter if value exists
+        if (from && from.trim() !== "") {
+          query.from = { $regex: new RegExp(`^${from}`, "i") }; // starts with
+        }
+        if (to && to.trim() !== "") {
+          query.to = { $regex: new RegExp(`^${to}`, "i") };
+        }
+        if (transport && transport.trim() !== "") {
+          query.type = transport;
+        }
+
+        // Sort
+        let sortObj = {};
+        if (sort === "low") sortObj.price = 1;
+        else if (sort === "high") sortObj.price = -1;
+
+        const tickets = await userTickets
+          .find(query)
+          .sort(sortObj)
+          .toArray();
+
+        res.send(tickets);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Failed to fetch tickets", error });
+      }
+    });
 
     app.patch("/tickets/:id", verifyFBToken, verifyVendor, async (req, res) => {
       const id = req.params.id;
