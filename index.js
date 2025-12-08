@@ -278,8 +278,7 @@ async function run() {
       }
     });
 
-
-      app.get(
+    app.get(
       "/all-tickets/advertise-tickets",
       verifyFBToken,
       verifyAdmin,
@@ -288,12 +287,43 @@ async function run() {
           const results = await userTickets.find().toArray();
           res.send(results);
         } catch (error) {
-          res.status(500).send({message:"advertise-tickets not send"});
+          res.status(500).send({ message: "advertise-tickets not send" });
         }
       }
     );
 
-  
+    app.patch(
+      "/tickets/:id/advertise",
+      verifyFBToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const { advertise } = req.body; // boolean
+
+        try {
+          if (advertise) {
+            // Count currently advertised tickets
+            const count = await userTickets.countDocuments({ advertise: true });
+            if (count >= 6) {
+              return res
+                .status(400)
+                .send({ message: "Maximum 6 tickets can be advertised" });
+            }
+          }
+
+          const result = await userTickets.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: { advertise } }
+          );
+
+          res.send(result);
+        } catch (error) {
+          res
+            .status(500)
+            .send({ message: "Failed to update advertise status", error });
+        }
+      }
+    );
   } finally {
   }
 }
