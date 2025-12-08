@@ -181,53 +181,7 @@ async function run() {
       }
     );
 
-    // app.get("/all-tickets", async (req, res) => {
-    //   try {
-    //     const tickets = await userTickets
-    //       .aggregate([
-    //         {
-    //           $lookup: {
-    //             from: "users",
-    //             localField: "vendorEmail",
-    //             foreignField: "email",
-    //             as: "vendor",
-    //           },
-    //         },
-    //         {
-    //           $unwind: "$vendor",
-    //         },
-    //         {
-    //           $match: {
-    //             "vendor.role": "vendor",
-    //             "vendor.isFraud": { $ne: true }, // fraud vendor hide
-    //             status: "approve", // only approved tickets
-    //           },
-    //         },
-    //         {
-    //           $project: {
-    //             vendor: 0,
-    //           },
-    //         },
-    //       ])
-    //       .toArray();
-
-    //     res.send(tickets);
-    //   } catch (error) {
-    //     res.status(500).send({ message: "Failed to fetch tickets", error });
-    //   }
-    // });
-
-    // Remove this route
-    // app.patch("/tickets/:id", async (req, res) => {
-    //   const { status } = req.body;
-    //   const result = await userTickets.updateOne(
-    //     { _id: new ObjectId(req.params.id) },
-    //     { $set: { status } }
-    //   );
-    //   res.send(result);
-    // });
-
-    app.get("/all-tickets", async (req, res) => {
+    app.get("/all-tickets", verifyFBToken, async (req, res) => {
       try {
         const { from, to, transport, sort } = req.query;
 
@@ -258,10 +212,7 @@ async function run() {
         if (sort === "low") sortObj.price = 1;
         else if (sort === "high") sortObj.price = -1;
 
-        const tickets = await userTickets
-          .find(query)
-          .sort(sortObj)
-          .toArray();
+        const tickets = await userTickets.find(query).sort(sortObj).toArray();
 
         res.send(tickets);
       } catch (error) {
@@ -306,6 +257,43 @@ async function run() {
         res.status(500).send({ message: "Failed to update ticket", error });
       }
     });
+
+    app.get("/all-tickets/latest-tickets", async (req, res) => {
+      try {
+        const fraudVendors = await userCollection
+          .find({ role: "vendor", isFraud: true })
+          .toArray();
+        const fraudEmails = fraudVendors.map((v) => v.email);
+
+        const tickets = await userTickets
+          .find({ vendorEmail: { $nin: fraudEmails }, status: "approve" })
+          .sort({ createdAt: -1 })
+          .limit(6)
+          .toArray();
+
+        res.send(tickets);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Failed to fetch tickets", error });
+      }
+    });
+
+
+      app.get(
+      "/all-tickets/advertise-tickets",
+      verifyFBToken,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const results = await userTickets.find().toArray();
+          res.send(results);
+        } catch (error) {
+          res.status(500).send({message:"advertise-tickets not send"});
+        }
+      }
+    );
+
+  
   } finally {
   }
 }
@@ -317,3 +305,4 @@ app.get("/", (req, res) => {
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
+//
