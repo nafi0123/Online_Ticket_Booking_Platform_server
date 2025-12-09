@@ -383,6 +383,35 @@ async function run() {
 
       res.send({ success: true, result });
     });
+
+
+
+
+    app.get("/user-bookings", verifyFBToken, async (req, res) => {
+      try {
+        const email = req.query.email;
+        // const status = req.query.status;
+
+        const filter = {};
+
+        if (email) filter.email = email; 
+        // if (status) filter.status = status;
+
+        const result = await ticketsCollection.find(filter).toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Server Error", error });
+      }
+    });
+
+
+
+
+
+
+
+
+
   } finally {
   }
 }
