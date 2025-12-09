@@ -60,6 +60,7 @@ async function run() {
     const db = client.db("Online_Ticket_Booking_Platform");
     const userCollection = db.collection("users");
     const userTickets = db.collection("tickets");
+    const ticketsCollection = db.collection("buyingTickets");
 
     // middle admin before allowing admin activity
     // must be used after verifyFBToken middleware
@@ -192,7 +193,7 @@ async function run() {
         const fraudEmails = fraudVendors.map((v) => v.email);
 
         const query = {
-          status: "approve", // only approved tickets
+          status: "approve",
           vendorEmail: { $nin: fraudEmails },
         };
 
@@ -278,6 +279,26 @@ async function run() {
       }
     });
 
+    app.get("/all-tickets/advertise-tickets/home-page", async (req, res) => {
+      try {
+        const tickets = await userTickets
+          .find({ advertise: true })
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        res.send(tickets);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to load tickets", error });
+      }
+    });
+
+    app.get("/tickets-details-card/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await userTickets.findOne(query);
+      res.send(result);
+    });
+
     app.get(
       "/all-tickets/advertise-tickets",
       verifyFBToken,
@@ -324,6 +345,44 @@ async function run() {
         }
       }
     );
+
+    // buyingTickets
+    app.post("/book-ticket", verifyFBToken, async (req, res) => {
+      const buyingTicketsData = req.body;
+      buyingTicketsData.createdAt = new Date();
+      buyingTicketsData.trackId = generateTrackingId();
+      const result = await ticketsCollection.insertOne(buyingTicketsData);
+      res.send(result);
+    });
+
+    app.get("/book-ticket", verifyFBToken, verifyVendor, async (req, res) => {
+      try {
+        const vendorEmail = req.query.vendor_email;
+        const status = req.query.status;
+
+        const filter = {};
+
+        if (vendorEmail) filter.vendor_email = vendorEmail; // ✅ FIXED
+        if (status) filter.status = status;
+
+        const result = await ticketsCollection.find(filter).toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Server Error", error });
+      }
+    });
+
+    app.patch("/update-booking/:id", async (req, res) => {
+      const id = req.params.id;
+      const { status } = req.body;
+
+      const result = await ticketsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status } }
+      );
+
+      res.send({ success: true, result });
+    });
   } finally {
   }
 }
