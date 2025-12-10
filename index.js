@@ -3,7 +3,7 @@ const cors = require("cors");
 const app = express();
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-// const stripe = require("stripe")(process.env.STRIPE_SECRET);
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 const port = process.env.PORT || 5000;
 const crypto = require("crypto");
@@ -86,6 +86,93 @@ async function run() {
 
       next();
     };
+
+    // payment
+    // Create Stripe Checkout session
+    app.post("/payment-checkout-session", async (req, res) => {
+      try {
+        const paymentInfo = req.body;
+
+        if (!paymentInfo.price || !paymentInfo.title) {
+          return res.status(400).send({ error: "Missing price or title" });
+        }
+
+        const amount = parseInt(paymentInfo.price) * 100; // Stripe expects cents
+        const session = await stripe.checkout.sessions.create({
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                unit_amount: amount,
+                product_data: {
+                  name: `Please pay for: ${paymentInfo.title}`,
+                  description: `Tracking ID: ${paymentInfo.trackId}`,
+                  images: [paymentInfo.image],
+                },
+              },
+              quantity: 1,
+            },
+          ],
+          mode: "payment",
+          metadata: paymentInfo, // send all metadata
+          customer_email: paymentInfo.email,
+          success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
+        });
+
+        res.send({ url: session.url });
+      } catch (err) {
+        console.error("Stripe checkout error:", err);
+        res.status(500).send({ error: err.message });
+      }
+    });
+
+    // Payment Success Route
+    app.patch("/payment-success", async (req, res) => {
+      try {
+        const sessionId = req.query.session_id;
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+        const transactionId = session.payment_intent;
+        const meta = session.metadata;
+
+        const buyerTicketId = meta.buyerTicketId; // buyer ticket _id
+        const vendorTicketId = meta.ticketId; // vendor ticket _id
+        const quantityBought = parseInt(meta.quantity);
+
+        // 1️⃣ Update buyer ticket directly using _id
+        const updateBooking = await ticketsCollection.updateOne(
+          { _id: new ObjectId(buyerTicketId) },
+          {
+            $set: {
+              status: "paid",
+              transactionId: transactionId,
+              vendor_status: "sold",
+              paymentDate: new Date(),
+            },
+          }
+        );
+
+        // 2️⃣ Update vendor ticket quantity
+        const updateVendorTicket = await userTickets.updateOne(
+          { _id: new ObjectId(vendorTicketId) },
+          { $inc: { quantity: -quantityBought } }
+        );
+
+        return res.send({
+          success: true,
+          message: "Payment Success!",
+          transactionId,
+          buyerTicketId,
+          title: meta.title,
+          from: meta.from,
+          to: meta.to,
+        });
+      } catch (error) {
+        console.error("Payment success error:", error);
+        return res.status(500).send({ success: false, error: error.message });
+      }
+    });
 
     // profile
 
@@ -384,9 +471,6 @@ async function run() {
       res.send({ success: true, result });
     });
 
-
-
-
     app.get("/user-bookings", verifyFBToken, async (req, res) => {
       try {
         const email = req.query.email;
@@ -394,7 +478,7 @@ async function run() {
 
         const filter = {};
 
-        if (email) filter.email = email; 
+        if (email) filter.email = email;
         // if (status) filter.status = status;
 
         const result = await ticketsCollection.find(filter).toArray();
@@ -403,15 +487,6 @@ async function run() {
         res.status(500).send({ message: "Server Error", error });
       }
     });
-
-
-
-
-
-
-
-
-
   } finally {
   }
 }
