@@ -275,9 +275,6 @@ async function run() {
       }
     );
 
-
-    
-
     app.delete(
       "/tickets/:id",
       verifyFBToken,
@@ -292,7 +289,7 @@ async function run() {
 
     app.get("/all-tickets", verifyFBToken, async (req, res) => {
       try {
-        const { from, to, transport, sort } = req.query;
+        const { from, to, transport, sort, page = 1, limit = 6 } = req.query;
 
         // Fraud vendors
         const fraudVendors = await userCollection
@@ -305,9 +302,8 @@ async function run() {
           vendorEmail: { $nin: fraudEmails },
         };
 
-        // Only add filter if value exists
         if (from && from.trim() !== "") {
-          query.from = { $regex: new RegExp(`^${from}`, "i") }; // starts with
+          query.from = { $regex: new RegExp(`^${from}`, "i") };
         }
         if (to && to.trim() !== "") {
           query.to = { $regex: new RegExp(`^${to}`, "i") };
@@ -321,14 +317,30 @@ async function run() {
         if (sort === "low") sortObj.price = 1;
         else if (sort === "high") sortObj.price = -1;
 
-        const tickets = await userTickets.find(query).sort(sortObj).toArray();
+        const tickets = await userTickets
+          .find(query)
+          .sort(sortObj)
+          .skip((page - 1) * limit)
+          .limit(Number(limit))
+          .toArray();
 
-        res.send(tickets);
+        const totalTickets = await userTickets.countDocuments(query);
+
+        res.send({
+          tickets,
+          totalTickets,
+          totalPages: Math.ceil(totalTickets / limit),
+          currentPage: Number(page),
+        });
       } catch (error) {
         console.error(error);
         res.status(500).send({ message: "Failed to fetch tickets", error });
       }
     });
+
+
+
+    
 
     app.patch("/tickets/:id", verifyFBToken, verifyVendor, async (req, res) => {
       const id = req.params.id;
@@ -521,7 +533,7 @@ async function run() {
           let query = {};
 
           if (vendorEmail) query.vendor_email = vendorEmail;
-          if (vendorStatus) query.vendor_status = vendorStatus; 
+          if (vendorStatus) query.vendor_status = vendorStatus;
 
           const result = await ticketsCollection.find(query).toArray();
 
