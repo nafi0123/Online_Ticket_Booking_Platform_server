@@ -88,7 +88,7 @@ async function run() {
     };
 
     // payment
-    // Create Stripe Checkout session
+
     app.post("/payment-checkout-session", async (req, res) => {
       try {
         const paymentInfo = req.body;
@@ -171,6 +171,24 @@ async function run() {
       } catch (error) {
         console.error("Payment success error:", error);
         return res.status(500).send({ success: false, error: error.message });
+      }
+    });
+
+    app.get("/payment-history", verifyFBToken, async (req, res) => {
+      try {
+        const email = req.query.email;
+        const status = req.query.status;
+        let query = {};
+
+        if (email) query.email = email;
+        if (email) query.status = status;
+
+        const result = await ticketsCollection.find(query).toArray();
+
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Server Error" });
       }
     });
 
