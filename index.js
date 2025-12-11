@@ -275,6 +275,9 @@ async function run() {
       }
     );
 
+
+    
+
     app.delete(
       "/tickets/:id",
       verifyFBToken,
@@ -505,6 +508,30 @@ async function run() {
         res.status(500).send({ message: "Server Error", error });
       }
     });
+
+    app.get(
+      "/revenue-overview",
+      verifyFBToken,
+      verifyVendor,
+      async (req, res) => {
+        try {
+          const vendorEmail = req.query.vendor_email;
+          const vendorStatus = req.query.vendor_status;
+
+          let query = {};
+
+          if (vendorEmail) query.vendor_email = vendorEmail;
+          if (vendorStatus) query.vendor_status = vendorStatus; 
+
+          const result = await ticketsCollection.find(query).toArray();
+
+          res.send(result);
+        } catch (error) {
+          console.error(error);
+          res.status(500).send({ message: "Server Error" });
+        }
+      }
+    );
   } finally {
   }
 }
