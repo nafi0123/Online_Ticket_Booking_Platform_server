@@ -261,6 +261,16 @@ async function run() {
       }
     });
 
+    app.get(
+      "/admin-home",
+      verifyFBToken,
+      verifyAdmin,
+      async (req, res) => {
+        const results = await userCollection.find().toArray();
+        res.send(results);
+      }
+    );
+
     app.patch(
       "/tickets/:id/role",
       verifyFBToken,
@@ -337,10 +347,6 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch tickets", error });
       }
     });
-
-
-
-    
 
     app.patch("/tickets/:id", verifyFBToken, verifyVendor, async (req, res) => {
       const id = req.params.id;
