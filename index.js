@@ -234,6 +234,23 @@ async function run() {
       res.send(result);
     });
 
+    app.patch("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      console.log(email);
+      const { displayName, photoURL } = req.body;
+
+      const filter = { email };
+      const updateDoc = {
+        $set: {
+          displayName,
+          photoURL,
+        },
+      };
+
+      const result = await userCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+
     // tickets
 
     app.post("/tickets", verifyFBToken, verifyVendor, async (req, res) => {
@@ -261,15 +278,10 @@ async function run() {
       }
     });
 
-    app.get(
-      "/admin-home",
-      verifyFBToken,
-      verifyAdmin,
-      async (req, res) => {
-        const results = await userCollection.find().toArray();
-        res.send(results);
-      }
-    );
+    app.get("/admin-home", verifyFBToken, verifyAdmin, async (req, res) => {
+      const results = await userCollection.find().toArray();
+      res.send(results);
+    });
 
     app.patch(
       "/tickets/:id/role",
