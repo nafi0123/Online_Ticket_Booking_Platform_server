@@ -311,7 +311,7 @@ async function run() {
 
     app.get("/all-tickets", verifyFBToken, async (req, res) => {
       try {
-        const { from, to, transport, sort, page = 1, limit = 6 } = req.query;
+        const { from, to, transport, sort, page = 1, limit = 8 } = req.query;
 
         // Fraud vendors
         const fraudVendors = await userCollection
@@ -407,7 +407,7 @@ async function run() {
         const tickets = await userTickets
           .find({ vendorEmail: { $nin: fraudEmails }, status: "approve" })
           .sort({ createdAt: -1 })
-          .limit(6)
+          .limit(8)
           .toArray();
 
         res.send(tickets);
@@ -443,9 +443,22 @@ async function run() {
       verifyAdmin,
       async (req, res) => {
         try {
-          const results = await userTickets.find().toArray();
+          const fraudVendors = await userCollection
+            .find({ role: "vendor", isFraud: true })
+            .project({ email: 1 })
+            .toArray();
+
+          const fraudEmails = fraudVendors.map((v) => v.email);
+
+          const results = await userTickets
+            .find({
+              vendorEmail: { $nin: fraudEmails },
+            })
+            .toArray();
+
           res.send(results);
         } catch (error) {
+          console.error(error);
           res.status(500).send({ message: "advertise-tickets not send" });
         }
       }
@@ -463,10 +476,10 @@ async function run() {
           if (advertise) {
             // Count currently advertised tickets
             const count = await userTickets.countDocuments({ advertise: true });
-            if (count >= 6) {
+            if (count >= 8) {
               return res
                 .status(400)
-                .send({ message: "Maximum 6 tickets can be advertised" });
+                .send({ message: "Maximum 8 tickets can be advertised" });
             }
           }
 
